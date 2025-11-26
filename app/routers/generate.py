@@ -30,32 +30,32 @@ def generate_route(
 
     # ✅ 使用 snake_case 字段访问
     prompt = f"""
-你是一个聪明的旅游规划 AI 助手，请为用户制定一日旅游路线，满足以下要求：
+You are a smart travel planning AI assistant. Please generate a **one-day travel itinerary** for the user based on the following preferences:
 
-1. 优先使用用户上传的收藏夹地点（餐厅、景点、咖啡店等）
-2. 如果收藏夹中没有符合用户偏好的地点（如：偏好菜系的餐厅），请从 Yelp 上推荐评分高的替代选项
-3. 所有地点需在出发时间和结束时间范围内，交通方式合理，单次通勤不超过 {preferences.max_commute_time} 分钟
+1. Prioritize places from the user's uploaded bookmarks (restaurants, landmarks, cafes, etc.)
+2. If no matching places are found in the bookmarks (e.g., preferred cuisine), recommend high-rated alternatives from Yelp
+3. All places must fit within the user's time range and commute limitations. Each single trip should not exceed {preferences.max_commute_time} minutes.
 
-【用户偏好】
-- 中心地标：{preferences.center_landmark}
-- 必去景点：{', '.join(preferences.must_visit)}
-- 出发时间：{preferences.start_time}
-- 结束时间：{preferences.end_time}
-- 可接受交通方式：{', '.join(preferences.transport_modes)}
-- 是否允许饮酒：{"是" if preferences.allow_alcohol else "否"}
-- 偏好菜系：{', '.join(preferences.preferred_cuisine)}
-- 最长单次通勤时间：{preferences.max_commute_time} 分钟
+【User Preferences】
+- Central Landmark: {preferences.center_landmark}
+- Must-Visit Places: {', '.join(preferences.must_visit)}
+- Start Time: {preferences.start_time}
+- End Time: {preferences.end_time}
+- Preferred Transportation Modes: {', '.join(preferences.transport_modes)}
+- Allow Alcohol: {"Yes" if preferences.allow_alcohol else "No"}
+- Preferred Cuisines: {', '.join(preferences.preferred_cuisine)}
+- Max Single Commute Time: {preferences.max_commute_time} minutes
 
-【用户收藏夹】（优先从以下地点中选择）：
+【User Bookmarks】 (prioritize selections from below):
 {bookmark_text}
 
-请输出格式如下：
-09:00 - 10:00: 出发并前往 [地点名称]，说明原因（如：博物馆、餐厅、景点等）
-10:00 - 11:30: 游览或用餐等活动安排
+Please output the itinerary in the following format:
+09:00 - 10:00: Head to [Place Name], brief explanation (e.g., museum, restaurant, landmark, etc.)
+10:00 - 11:30: Activity such as visit, dining, resting, etc.
 
-请规划完整的一日行程，并在适当时段安排用餐、休息、游玩、返回等安排。
+Plan a full-day itinerary with reasonable timing for meals, sightseeing, and breaks. No need to include returning home.
 """
-    print("🧾 构造的 Prompt 内容：\n", prompt)
+    print("🧾 Constructed Prompt:\n", prompt)
 
     try:
         response = client.chat.completions.create(
