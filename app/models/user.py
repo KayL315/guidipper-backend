@@ -10,7 +10,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)  # new added field
     hashed_password = Column(String, nullable=False)
 
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete")
     generated_routes = relationship("GeneratedRoute", back_populates="user")
+
