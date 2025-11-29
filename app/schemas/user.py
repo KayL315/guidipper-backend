@@ -9,10 +9,13 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
+    username: Optional[str] = None
+    avatar_url: Optional[str] = None  
     bookmarks: List[BookmarkResponse] = []
-    username: Optional[str] = None 
+
     class Config:
         from_attributes = True
+
 
 class UserLogin(BaseModel):
     email: EmailStr
