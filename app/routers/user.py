@@ -43,10 +43,12 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
         "access_token": access_token, 
         "token_type": "bearer",
         "user": {
-        "id": user.id,
-        "email": user.email,
-        "username": user.username,
-    }}
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "avatar_url": user.avatar_url,
+        }
+    }
 
 # Get current user info
 from app.dependencies.auth import get_current_user
