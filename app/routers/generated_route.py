@@ -29,9 +29,17 @@ def save_generated_route(
     return new_route
 
 #get generated routes for a user
-@router.get("/routes/{user_id}", response_model=List[GeneratedRouteResponse])
+@router.get("/routes/{user_id}")
 def get_routes_by_user(user_id: int, db: Session = Depends(get_db)):
-    routes = db.query(models.generated_route.GeneratedRoute).filter(models.generated_route.GeneratedRoute.user_id == user_id).all()
-    if not routes:
-        raise HTTPException(status_code=404, detail="No routes found for this user.")
-    return routes
+    """
+    Return the saved routes for a user. Do not 404 when empty,
+    so frontend can show an empty list gracefully.
+    Shape matches frontend expectation: {"routes": [<route_text>, ...]}.
+    """
+    routes = (
+        db.query(models.generated_route.GeneratedRoute)
+        .filter(models.generated_route.GeneratedRoute.user_id == user_id)
+        .order_by(models.generated_route.GeneratedRoute.created_at.desc())
+        .all()
+    )
+    return {"routes": [r.route_text for r in routes]}
