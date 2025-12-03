@@ -6,10 +6,9 @@ from app.database import get_db
 from app.utils.hash import hash_password, verify_password
 from app.utils.token import create_access_token
 from app import schemas
-from fastapi import UploadFile, File, Form
+from fastapi import UploadFile, File
 import uuid
 import shutil
-from fastapi import UploadFile, File, Form
 
 router = APIRouter()
 
@@ -73,17 +72,6 @@ def get_user_routes(
     return {
         "routes": [r.route_text for r in routes] if routes else []
     }
-
-@router.put("/update-username")
-def update_username(
-    username: str = Form(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    current_user.username = username
-    db.commit()
-    db.refresh(current_user)
-    return {"message": "Username updated", "username": current_user.username}
 
 @router.post("/upload-avatar")
 def upload_avatar(
