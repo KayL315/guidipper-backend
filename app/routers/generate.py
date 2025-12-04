@@ -1,3 +1,6 @@
+import math
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -10,6 +13,100 @@ from app.models.generated_route import GeneratedRoute
 
 router = APIRouter()
 client = OpenAI()  # 自动从环境变量读取 OPENAI_API_KEY
+
+def distance_km(lon1, lat1, lon2, lat2):
+    """
+    Calculate distance between 2 point(Unit: km)
+    Parameter Unit: degree
+    Haversine formula
+    """
+    R = 6371.0
+
+    # to radian
+    rad_lon1 = math.radians(lon1)
+    rad_lat1 = math.radians(lat1)
+    rad_lon2 = math.radians(lon2)
+    rad_lat2 = math.radians(lat2)
+
+    # Haversine formula
+    dlon = rad_lon2 - rad_lon1
+    dlat = rad_lat2 - rad_lat1
+
+    a = math.sin(dlat / 2) ** 2 + math.cos(rad_lat1) * math.cos(rad_lat2) * math.sin(dlon / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+
+    distance = R * c
+
+    return round(distance, 2)
+
+def distance_and_walk_time_str(lon1, lat1, lon2, lat2, walk_speed_kmh=5.0):
+    """
+    Example：
+    - "distance 1.23 km, walk time 15 min - 22 min"
+    - "distance 5.67 km, walk time > 68 min"
+    """
+    dist = distance_km(lon1, lat1, lon2, lat2)  # km
+
+    t_min = dist / walk_speed_kmh * 60
+    t_max = dist * math.sqrt(2) / walk_speed_kmh * 60
+    t_min_rounded = int(round(t_min))
+    t_max_rounded = int(round(t_max))
+
+    if t_min_rounded > 60:
+        return f"distance {dist} km, walk time > {t_min_rounded} min"
+    else:
+        return f"distance {dist} km, walk time {t_min_rounded} min - {t_max_rounded} min"
+
+def generate_center_coordinate(center_landmark: str):
+    prompt = """
+Your task: extract a precise geo-coordinate from the user message. 
+Respond with JSON only, containing:
+{
+  "place_name": "...",
+  "longitude": xx.xxxx,
+  "latitude": xx.xxxx
+}
+If coordinates are missing, use your best estimate.
+
+Example: 
+
+User message: "Eiffel Tower"
+Your response: "{
+    "place_name": "Eiffel Tower",
+    "longitude": 2.2945,
+    "latitude": 48.8584
+}"
+"""
+
+    prompt += f"""
+User message: "{center_landmark}"
+Your response:
+"""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1500,
+            temperature=0.7,
+        )
+    except Exception as e:
+        print("❌ OpenAI API 报错：", str(e))
+        raise HTTPException(status_code=500, detail="OpenAI API 请求失败")
+    
+    result = response.choices[0].message.content
+    result_obj = json.loads(result)
+    coordinate = (result_obj["longitude"], result_obj["latitude"])
+    print("✅ 解析出的坐标：", coordinate)
+    return coordinate
+
+def filter_bookmarks_by_center_landmark(bookmarks, center_lon, center_lat, max_distance_km=50.0):
+    filtered = []
+    for b in bookmarks:
+        dist = distance_km(center_lon, center_lat, b.longitude, b.latitude)
+        if dist <= max_distance_km:
+            filtered.append(b)
+    print(f"✅ 过滤后剩余 {len(filtered)} 个 bookmark（距离中心地标 {max_distance_km} km 内）")
+    return filtered
 
 @router.post("/generate-route")
 def generate_route(
@@ -24,9 +121,28 @@ def generate_route(
     if not bookmarks:
         raise HTTPException(status_code=400, detail="请先上传收藏夹 JSON 文件")
 
+    # 生成中心地标坐标
+    center_lon, center_lat = generate_center_coordinate(preferences.center_landmark)
+
+    # 过滤无关的 bookmark
+    bookmarks = filter_bookmarks_by_center_landmark(bookmarks, center_lon, center_lat, max_distance_km=50.0)
+
     # 整理 bookmarks 数据为字符串
     bookmark_list = [f"{b.title}, {b.address}" for b in bookmarks]
     bookmark_text = "\n".join(bookmark_list)
+
+    # Calculate distance info between any 2 bookmarks (for debugging)
+    distance_info = []
+    for i in range(len(bookmarks)):
+        for j in range(i + 1, len(bookmarks)):
+            b1 = bookmarks[i]
+            b2 = bookmarks[j]
+            dist_info = distance_and_walk_time_str(
+                b1.longitude, b1.latitude,
+                b2.longitude, b2.latitude
+            )
+            distance_info.append(f"Distance between '{b1.title}' and '{b2.title}': {dist_info}")
+    distance_info_text = "\n".join(distance_info)
 
     # ✅ 使用 snake_case 字段访问
     prompt = f"""
@@ -48,6 +164,9 @@ You are a smart travel planning AI assistant. Please generate a **one-day travel
 
 【User Bookmarks】 (prioritize selections from below):
 {bookmark_text}
+
+【Distance Information】
+{distance_info_text}
 
 Please output the itinerary in the following format:
 09:00 - 10:00: Head to [Place Name], brief explanation (e.g., museum, restaurant, landmark, etc.)
