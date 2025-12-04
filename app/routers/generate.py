@@ -84,7 +84,7 @@ Your response:
 """
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.7,
@@ -99,7 +99,7 @@ Your response:
     print("✅ 解析出的坐标：", coordinate)
     return coordinate
 
-def filter_bookmarks_by_center_landmark(bookmarks, center_lon, center_lat, max_distance_km=50.0):
+def filter_bookmarks_by_center_landmark(bookmarks, center_lon, center_lat, max_distance_km=100.0):
     filtered = []
     for b in bookmarks:
         dist = distance_km(center_lon, center_lat, b.longitude, b.latitude)
@@ -151,9 +151,10 @@ You are a smart travel planning AI assistant. Please generate a **one-day travel
 1. Prioritize places from the user's uploaded bookmarks (restaurants, landmarks, cafes, etc.)
 2. If no matching places are found in the bookmarks (e.g., preferred cuisine), recommend high-rated alternatives from Yelp
 3. All places must fit within the user's time range and commute limitations. Each single trip should not exceed {preferences.max_commute_time} minutes.
+4. The commute time between places should be calculated based on walking speed.
 
 【User Preferences】
-- Central Landmark: {preferences.center_landmark}
+- Start Point: {preferences.center_landmark}
 - Must-Visit Places: {', '.join(preferences.must_visit)}
 - Start Time: {preferences.start_time}
 - End Time: {preferences.end_time}
@@ -178,7 +179,7 @@ Plan a full-day itinerary with reasonable timing for meals, sightseeing, and bre
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=1500,
             temperature=0.7,
