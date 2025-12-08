@@ -8,7 +8,8 @@ class GeneratedRoute(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    route_text = Column(Text, nullable=False) 
+    route_text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="generated_routes")
+    chat_sessions = relationship("ChatSession", back_populates="generated_route", cascade="all, delete")

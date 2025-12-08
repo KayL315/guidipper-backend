@@ -15,4 +15,5 @@ class User(Base):
 
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete")
     generated_routes = relationship("GeneratedRoute", back_populates="user")
+    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete")
 
