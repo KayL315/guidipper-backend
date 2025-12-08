@@ -6,6 +6,7 @@ from app.routers import user
 from app.routers import bookmark
 from app.routers import generate
 from app.routers import generated_route
+from app.routers import chat
 from dotenv import load_dotenv
 import openai
 import os
@@ -49,6 +50,7 @@ app.include_router(user.router)
 app.include_router(bookmark.router)
 app.include_router(generate.router)
 app.include_router(generated_route.router)
+app.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 # 测试数据库
 @app.get("/test-db")
