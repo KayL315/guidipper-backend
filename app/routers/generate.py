@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.bookmark import Bookmark
 from openai import OpenAI  # 使用新版 openai SDK
 from app.models.generated_route import GeneratedRoute
+from app.utils.yelp import search_businesses
 
 router = APIRouter()
 client = OpenAI()  # 自动从环境变量读取 OPENAI_API_KEY
@@ -131,6 +132,22 @@ def generate_route(
     bookmark_list = [f"{b.title}, {b.address}" for b in bookmarks]
     bookmark_text = "\n".join(bookmark_list)
 
+    # Yelp 兜底推荐（优先使用用户偏好的 cuisine 作为关键词）
+    cuisine_term = ", ".join(preferences.preferred_cuisine) if preferences.preferred_cuisine else "restaurants and sights"
+    yelp_places = search_businesses(
+        term=cuisine_term,
+        latitude=center_lat,
+        longitude=center_lon,
+        categories=None,
+        limit=6,
+    )
+    yelp_text = "\n".join(
+        f"{p['name']} - {p['address']} "
+        f"(rating {p['rating']}, reviews {p['review_count']}) "
+        f"{' / ' + ', '.join(p['categories']) if p.get('categories') else ''}"
+        for p in yelp_places
+    ) if yelp_places else "No Yelp results (or YELP_API_KEY not set)."
+
     # Calculate distance info between any 2 bookmarks (for debugging)
     distance_info = []
     for i in range(len(bookmarks)):
@@ -165,6 +182,9 @@ You are a smart travel planning AI assistant. Please generate a **one-day travel
 
 【User Bookmarks】 (prioritize selections from below):
 {bookmark_text}
+
+【Yelp Alternatives】 (use when bookmarks do not match preferences):
+{yelp_text}
 
 【Distance Information】
 {distance_info_text}
