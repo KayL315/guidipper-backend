@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
@@ -13,9 +13,14 @@ from app.utils.diff_utils import apply_diff
 from app.dependencies.auth import get_current_user
 from openai import OpenAI
 import json
+from pydantic import BaseModel
 
 router = APIRouter()
 client = OpenAI()
+
+
+class ApplyDiffPayload(BaseModel):
+    route_text: str | None = None
 
 @router.post("/sessions", response_model=ChatSessionResponse)
 def create_chat_session(
@@ -23,17 +28,20 @@ def create_chat_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    generated_route = db.query(GeneratedRoute).filter(
-        GeneratedRoute.id == session_data.generated_route_id,
-        GeneratedRoute.user_id == current_user.id
-    ).first()
+    generated_route = None
+    generated_route_id = session_data.generated_route_id
 
-    if not generated_route:
-        raise HTTPException(status_code=404, detail="Generated route not found or does not belong to user")
+    if generated_route_id:
+        generated_route = db.query(GeneratedRoute).filter(
+            GeneratedRoute.id == generated_route_id,
+            GeneratedRoute.user_id == current_user.id
+        ).first()
+        if not generated_route:
+            raise HTTPException(status_code=404, detail="Generated route not found or does not belong to user")
 
     new_session = ChatSession(
         user_id=current_user.id,
-        generated_route_id=session_data.generated_route_id
+        generated_route_id=generated_route_id
     )
     db.add(new_session)
     db.commit()
@@ -80,9 +88,11 @@ def get_chat_session(
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")
 
-    route = db.query(GeneratedRoute).filter(
-        GeneratedRoute.id == session.generated_route_id
-    ).first()
+    route = None
+    if session.generated_route_id:
+        route = db.query(GeneratedRoute).filter(
+            GeneratedRoute.id == session.generated_route_id
+        ).first()
 
     return {
         "id": session.id,
@@ -130,6 +140,8 @@ async def send_chat_message(
         for msg in messages_history
     ]
 
+    route_text_context = route.route_text if route else (message_data.route_text or "")
+
     prompt = f"""
 You are a knowledgeable tour guide assistant. You have access to the user's generated tour plan below.
 Use this plan as context to answer the user's questions. If the user wants to modify the plan, you must provide a Git-style diff.
@@ -140,7 +152,7 @@ The JSON should have these fields:
 - "diff": A Git-style unified diff (optional, only if suggesting plan modifications)
 
 Tour Plan:
-{route.route_text if route else "No route found"}
+{route_text_context if route_text_context else "No route provided"}
 
 User Question: {message_data.content}
 
@@ -236,6 +248,7 @@ def delete_chat_session(
 def apply_diff_to_route(
     session_id: int,
     message_id: int,
+    payload: ApplyDiffPayload = Body(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -258,22 +271,39 @@ def apply_diff_to_route(
     if not message.diff_content:
         raise HTTPException(status_code=400, detail="No diff content found in this message")
 
-    route = db.query(GeneratedRoute).filter(
-        GeneratedRoute.id == session.generated_route_id
-    ).first()
+    # If the session has a persisted route, update it; otherwise operate on provided text only.
+    if session.generated_route_id:
+        route = db.query(GeneratedRoute).filter(
+            GeneratedRoute.id == session.generated_route_id
+        ).first()
 
-    if not route:
-        raise HTTPException(status_code=404, detail="Generated route not found")
+        if not route:
+            raise HTTPException(status_code=404, detail="Generated route not found")
 
-    updated_route_text = apply_diff(route.route_text, message.diff_content)
+        updated_route_text = apply_diff(route.route_text, message.diff_content)
+
+        if updated_route_text is None:
+            raise HTTPException(status_code=400, detail="Failed to apply diff - invalid diff format")
+
+        route.route_text = updated_route_text
+        db.commit()
+
+        return {
+            "message": "Diff applied successfully",
+            "updated_route_text": updated_route_text
+        }
+
+    # No persisted route; require route_text from client and return patched text without saving.
+    base_text = payload.route_text if payload else None
+    if base_text is None:
+        raise HTTPException(status_code=400, detail="route_text is required when no saved route exists")
+
+    updated_route_text = apply_diff(base_text, message.diff_content)
 
     if updated_route_text is None:
         raise HTTPException(status_code=400, detail="Failed to apply diff - invalid diff format")
 
-    route.route_text = updated_route_text
-    db.commit()
-
     return {
-        "message": "Diff applied successfully",
+        "message": "Diff applied successfully (not saved)",
         "updated_route_text": updated_route_text
     }

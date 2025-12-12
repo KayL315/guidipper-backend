@@ -34,7 +34,7 @@ def get_routes_by_user(user_id: int, db: Session = Depends(get_db)):
     """
     Return the saved routes for a user. Do not 404 when empty,
     so frontend can show an empty list gracefully.
-    Shape matches frontend expectation: {"routes": [<route_text>, ...]}.
+    Shape: {"routes": [{"id": int, "route_text": str}, ...]}.
     """
     routes = (
         db.query(models.generated_route.GeneratedRoute)
@@ -42,4 +42,30 @@ def get_routes_by_user(user_id: int, db: Session = Depends(get_db)):
         .order_by(models.generated_route.GeneratedRoute.created_at.desc())
         .all()
     )
-    return {"routes": [r.route_text for r in routes]}
+    return {
+        "routes": [
+            {"id": r.id, "route_text": r.route_text, "created_at": r.created_at}
+            for r in routes
+        ]
+    }
+
+
+@router.delete("/routes/{route_id}")
+def delete_route(route_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Delete a saved route owned by the current user.
+    """
+    route = (
+        db.query(models.generated_route.GeneratedRoute)
+        .filter(
+            models.generated_route.GeneratedRoute.id == route_id,
+            models.generated_route.GeneratedRoute.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not route:
+        raise HTTPException(status_code=404, detail="Route not found")
+
+    db.delete(route)
+    db.commit()
+    return {"message": "Route deleted"}
