@@ -2,8 +2,11 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+
 class ChatMessageCreate(BaseModel):
     content: str
+    route_text: Optional[str] = None  # 当前计划文本，用于未保存情况下聊天上下文
+
 
 class ChatMessageResponse(BaseModel):
     id: int
